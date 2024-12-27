@@ -1,0 +1,128 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - "--log.level=DEBUG"  # Set the log level (DEBUG, INFO, WARN, ERROR, FATAL)
+      - "--log.format=json"
+      - "--accesslog.format=json"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.filename=/traefik/config/my_dynamic_conf/conf.yml"
+      - "--providers.file.watch=true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./certs:/certs
+      - traefik_logs:/logs
+      - "./certs/certificate.crt:/traefik/config/certs/traefik.crt"
+      - "./certs/d2k_private.key:/traefik/config/certs/traefik.key"
+      - "./dn-traefik.yml:/traefik/config/my_dynamic_conf/conf.yml:ro"
+    ports:
+      - "80:80"
+      - "443:443"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`${TRAEFIK_HOST}`)"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=nikhil.parmar@d2kindia.com:$apr1$tJsUxxkd$i.fZgOT.vIIAVQf/kwn5L1" # change the username and password
+      - "traefik.http.routers.api.tls=true"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.middlewares.redirect-to-https.scheme=https"
+      - "traefik.http.routers.redirection.rule=HostRegexp(`{host:.+}`)"
+      - "traefik.http.routers.redirection.entrypoints=web"
+      - "traefik.http.routers.redirection.middlewares=redirect-to-https"
+    depends_on:
+      - mysql
+      - redmine
+    networks:
+      - redmine-network
+
+  mysql:
+    image: mysql:8.0.36
+    container_name: mysql
+    volumes:
+      - mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - redmine-network
+
+  redmine:
+    build:
+      context: .
+      dockerfile: Dockerfile.redmine
+    container_name: redmine
+    volumes:
+      - redmine_data:/usr/src/redmine/files
+      - ./configuration.yml:/usr/src/redmine/config/configuration.yml
+      - ./themes/zenmine-510:/usr/src/redmine/public/themes/zenmine-510
+      - ./plugins/:/usr/src/redmine/plugins
+    environment:
+      REDMINE_DB_MYSQL: mysql
+      REDMINE_DB_DATABASE: ${REDMINE_DB_DATABASE}
+      REDMINE_DB_USERNAME: ${REDMINE_DB_USERNAME}
+      REDMINE_DB_PASSWORD: ${REDMINE_DB_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redmine.rule=Host(`${REDMINE_HOST}`)"
+      - "traefik.http.routers.redmine.entrypoints=websecure"
+      - "traefik.http.routers.redmine.tls=true"
+      - "traefik.http.services.redmine.loadbalancer.server.port=3000"
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - redmine-network
+  redis:
+    image: redis:latest
+    container_name: redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - redmine-network
+
+  sidekiq:
+    build:
+      context: .
+      dockerfile: Dockerfile.sidekiq
+    container_name: sidekiq
+    depends_on:
+      - redis
+      - redmine
+      - mysql
+    volumes:
+      - redmine_data:/usr/src/redmine/files
+      - ./configuration.yml:/usr/src/redmine/config/configuration.yml
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REDMINE_DB_MYSQL: mysql
+      REDMINE_DB_DATABASE: ${REDMINE_DB_DATABASE}
+      REDMINE_DB_USERNAME: ${REDMINE_DB_USERNAME}
+      REDMINE_DB_PASSWORD: ${REDMINE_DB_PASSWORD}
+    networks:
+      - redmine-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sidekiq.rule=Host(`${SIDEKIQ_HOST}`)"
+      - "traefik.http.routers.sidekiq.entrypoints=websecure"
+      - "traefik.http.routers.sidekiq.tls=true"
+      - "traefik.http.services.sidekiq.loadbalancer.server.port=3000" # Assuming Sidekiq has a web UI listening on port 3000
+
+volumes:
+  mysql_data:
+  redmine_data:
+  traefik_logs:
+  redis_data:
+
+
+networks:
+  redmine-network:
+    external: true

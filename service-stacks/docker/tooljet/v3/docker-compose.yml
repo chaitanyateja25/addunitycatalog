@@ -1,0 +1,46 @@
+services:
+  tooljet:
+    image: tooljet/tooljet:${TOOLJET_IMAGE_TAG:-latest}
+    container_name: tooljet-app
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    command: npm run start:prod
+    ports:
+      - "${TOOLJET_PORT:-8081}:8081"
+    environment:
+      TOOLJET_HOST: ${TOOLJET_HOST}
+      PORT: ${TOOLJET_PORT:-8081}
+      SERVE_CLIENT: "true"
+      TOOLJET_SERVER_URL: ${TOOLJET_SERVER_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      LOCKBOX_MASTER_KEY: ${LOCKBOX_MASTER_KEY}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      COMMENT_FEATURE_ENABLE: ${COMMENT_FEATURE_ENABLE}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_DOMAIN: ${SMTP_DOMAIN}
+      SMTP_PORT: ${SMTP_PORT}
+      SAML_SET_ENTITY_ID_SERVER_URL: ${SAML_SET_ENTITY_ID_SERVER_URL}
+      TOOLJET_DB_USER: ${TOOLJET_DB_USER}
+      TOOLJET_DB_PASS: ${TOOLJET_DB_PASS}
+      TOOLJET_DB_HOST: ${TOOLJET_DB_HOST}
+      TOOLJET_DB: ${TOOLJET_DB}
+      PGRST_JWT_SECRET: ${PGRST_JWT_SECRET}
+    env_file:
+      - path: .env-tooljet # optional override
+        required: false
+    networks:
+      - traefik_default
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.tooljet.rule=Host(`${TRAEFIK_HOST}`)"
+      - "traefik.http.routers.tooljet.entrypoints=websecure"
+      - "traefik.http.routers.tooljet.tls=true"
+
+networks:
+  traefik_default:
+    external: true
+    name: traefik_default

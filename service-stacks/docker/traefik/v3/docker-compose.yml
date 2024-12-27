@@ -1,0 +1,34 @@
+services:
+  traefik:
+    image: traefik:${TRAEFIK_IMAGE_TAG:-latest}
+    container_name: traefik
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_data:/logs
+      - ./certs:/etc/traefik/certs
+      - ./config/traefik.yml:/etc/traefik/traefik.yml:ro"
+      - ./config/file_provider/:/etc/traefik/file_provider
+    ports:
+      - "80:80"
+      - "443:443"
+    labels:
+      # Dashboard
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_HOST}`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.middlewares=authtraefik"
+      - "traefik.http.middlewares.authtraefik.basicauth.users=${TRAEFIK_USERNAME}:${TRAEFIK_PASSWORD}" # user:password
+      
+      # global redirect to https
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:.+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"  
+
+volumes:
+  traefik_data:
+    external: true
+    name: ${TRAEFIK_DATA_DOCKER_VOLUME:-traefik_data}

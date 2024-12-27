@@ -1,0 +1,12 @@
+# GITHUB - https://github.com/minio/console
+services:
+  minio-console:
+    image: minio/console:latest
+    container_name: minio-console
+    command: server
+    environment:
+      CONSOLE_PORT: "9090"
+      CONSOLE_MINIO_SERVER: ${CONSOLE_MINIO_SERVER}
+    restart: unless-stopped
+    ports:
+      - "${CONSOLE_PORT:-9090}:9090"

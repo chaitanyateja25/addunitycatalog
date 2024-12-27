@@ -1,0 +1,7 @@
+.env
+
+certs/*
+!certs/.gitkeep
+
+config/*
+!config/traefik.yml.example

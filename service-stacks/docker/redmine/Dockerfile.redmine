@@ -1,0 +1,25 @@
+FROM redmine:5.1.2
+
+# Set work directory
+WORKDIR /usr/src/redmine
+
+# Install dependencies for plugin installation
+RUN apt-get update && apt-get install -y build-essential ruby-dev
+
+# Copy your application directories from your host to the container
+COPY plugins/ /usr/src/redmine/plugins/
+COPY patches/time_query_performance_v5.patch /usr/src/redmine/time_query_performance_v5.patch
+COPY entrypoint.sh /usr/src/redmine/
+COPY additional_environment.rb /usr/src/redmine/config/
+# Apply patches
+RUN for file in /usr/src/redmine/*.patch; do patch -p1 < "$file"; done
+
+# Add matrix dependency
+RUN bundle add matrix 
+
+# ADD SIDEKIQ
+RUN bundle add sidekiq
+
+ENV RAILS_ENV=production
+RUN chmod +x /usr/src/redmine/entrypoint.sh
+# ENTRYPOINT ["/usr/src/redmine/entrypoint.sh"]

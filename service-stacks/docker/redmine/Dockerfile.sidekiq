@@ -1,0 +1,17 @@
+FROM redmine:5.1.2
+
+# Set work directory
+WORKDIR /usr/src/redmine
+
+# Install dependencies for plugin installation
+RUN apt-get update && apt-get install -y build-essential ruby-dev
+
+COPY additional_environment.rb /usr/src/redmine/config/
+COPY database.yml /usr/src/redmine/config/database.yml
+
+# ADD SIDEKIQ
+RUN bundle add sidekiq
+
+ENV RAILS_ENV=production
+
+CMD ["bundle", "exec", "sidekiq"]

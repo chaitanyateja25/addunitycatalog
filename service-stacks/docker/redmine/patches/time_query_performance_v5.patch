@@ -1,0 +1,120 @@
+diff --git a/app/controllers/timelog_controller.rb b/app/controllers/timelog_controller.rb
+index c0570c304..6ddc4a264 100644
+--- a/app/controllers/timelog_controller.rb
++++ b/app/controllers/timelog_controller.rb
+@@ -49,14 +49,14 @@ class TimelogController < ApplicationController
+ 
+     respond_to do |format|
+       format.html do
+-        @entry_count = scope.count
++        @entry_count = @query.query_count
+         @entry_pages = Paginator.new @entry_count, per_page_option, params['page']
+         @entries = scope.offset(@entry_pages.offset).limit(@entry_pages.per_page).to_a
+ 
+         render :layout => !request.xhr?
+       end
+       format.api do
+-        @entry_count = scope.count
++        @entry_count = @query.query_count
+         @offset, @limit = api_offset_and_limit
+         @entries = scope.offset(@offset).limit(@limit).preload(:custom_values => :custom_field).to_a
+       end
+diff --git a/app/models/time_entry_query.rb b/app/models/time_entry_query.rb
+index 3b884820f..979d76356 100644
+--- a/app/models/time_entry_query.rb
++++ b/app/models/time_entry_query.rb
+@@ -141,20 +141,64 @@ class TimeEntryQuery < Query
+     end
+   end
+ 
++  def query_count
++    base_count_scope.count
++  rescue ::ActiveRecord::StatementInvalid => e
++    raise StatementInvalid.new(e.message)
++  end
++
++  def base_group_scope
++    base_result_scope.
++      joins(joins_for_order_statement(group_by_statement)).
++      group(group_by_statement)
++  end
++
++  def total_for(column)
++    total_with_scope(column, base_result_scope)
++  end
++
+   def base_scope
+-    TimeEntry.visible.
+-      joins(:project, :user).
+-      includes(:activity).
+-      references(:activity).
+-      left_join_issue.
+-      where(statement)
++    TimeEntry.visible.where(statement)
++  end
++
++  def activity_scope_sql
++    "#{Enumeration.table_name}.project_id = #{TimeEntry.table_name}.project_id " \
++      "AND #{Enumeration.table_name}.project_id = #{Project.table_name}.id " \
++      "OR #{Enumeration.table_name}.project_id IS NULL"
++  end
++
++  def base_result_scope
++    base_scope.joins(:activity, :user)
++              .includes(:activity)
++              .left_join_issue
++              .where(activity_scope_sql)
++  end
++
++  def base_count_scope
++    scope = base_scope
++    scope = scope.joins(:activity).where(activity_scope_sql) if base_count_with_activity?
++    scope = scope.joins(:user) if base_count_with_user_join?
++    scope = scope.left_join_issue if base_count_with_issues?
++    scope
++  end
++
++  def base_count_with_activity?
++    has_filter?('activity_id') || group_by_column&.name == :activity
++  end
++
++  def base_count_with_user_join?
++    has_filter?('user') || has_filter?('author') || group_by_column&.name == :user
++  end
++
++  def base_count_with_issues?
++    filters&.map(&:first)&.detect { |f| f.start_with?('issue.') } || group_by_column&.name == :issue
+   end
+ 
+   def results_scope(options={})
+     order_option = [group_by_sort_order, (options[:order] || sort_clause)].flatten.reject(&:blank?)
+ 
+     order_option << "#{TimeEntry.table_name}.id ASC"
+-    base_scope.
++    base_result_scope.
+       order(order_option).
+       joins(joins_for_order_statement(order_option.join(',')))
+   end
+diff --git a/test/unit/time_entry_query_test.rb b/test/unit/time_entry_query_test.rb
+index 9db12b440..8ebc25d28 100644
+--- a/test/unit/time_entry_query_test.rb
++++ b/test/unit/time_entry_query_test.rb
+@@ -143,11 +143,17 @@ class TimeEntryQueryTest < ActiveSupport::TestCase
+     time_entry_ids = q.results_scope.pluck(:id)
+     paginated_time_entry_ids = []
+     # Test with a maximum of 2 records per page.
+-    ((q.results_scope.count / 2) + 1).times do |i|
++    ((q.query_count / 2) + 1).times do |i|
+       paginated_time_entry_ids += q.results_scope.offset((i * 2)).limit(2).pluck(:id)
+     end
+ 
+     # Non-paginated time entry ids and paginated time entry ids should be in the same order.
+     assert_equal time_entry_ids, paginated_time_entry_ids
+   end
++
++  def test_query_count
++    q = TimeEntryQuery.new(:name => '_')
++    entry_count = q.query_count
++    assert_equal q.results_scope.size, entry_count
++  end
+ end

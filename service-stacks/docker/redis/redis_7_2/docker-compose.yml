@@ -1,0 +1,14 @@
+services:
+  redis:
+    image: redis:7.2.5-alpine
+    container_name: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    external: true
+    name: ${REDIS_DATA_DOCKER_VOLUME:-redis_data}

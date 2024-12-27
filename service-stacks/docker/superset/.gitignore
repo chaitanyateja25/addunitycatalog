@@ -1,0 +1,11 @@
+.env
+.env-local
+
+requirements-local.txt
+
+pythonpath_dev/*
+!pythonpath_dev/superset_config.py
+!pythonpath_dev/superset_config_local.example
+
+superset_home/*
+!superset_home/.gitkeep

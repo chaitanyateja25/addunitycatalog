@@ -1,0 +1,33 @@
+# https://doc.traefik.io/traefik/reference/static-configuration/file/
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+entryPoints:
+  web:
+    address: :80
+  websecure:
+    address: :443
+    http:
+      tls: {}
+
+log:
+  level: DEBUG
+  format: json
+
+accessLog:
+  format: json
+
+api:
+  insecure: false
+  dashboard: true
+  debug: false
+  disableDashboardAd: true
+
+providers:
+  docker:
+    watch: true
+    exposedByDefault: false
+  file:
+    watch: true
+    directory: "/etc/traefik/file_provider"

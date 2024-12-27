@@ -1,0 +1,11 @@
+.env
+!.env.example
+
+config.d/*
+!config.d/config.xml.example
+
+users.d/*
+!users.d/users.xml.example
+
+logs/*
+!logs/.gitkeep
